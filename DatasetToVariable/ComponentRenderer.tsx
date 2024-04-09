@@ -1,7 +1,8 @@
-import * as React from "react";
 import { IIconProps, IButtonStyles, DefaultButton, Spinner } from "@fluentui/react";
+import * as React from "react"
 import * as XLSX from 'xlsx';
 
+// the colors from app maker
 export interface IMakerStyleProps {
     textColor: string;
     bgColor: string;
@@ -30,114 +31,123 @@ export interface IDatasetToExcelProps {
     itemsLoading: boolean;
     isLoading: boolean;
     onButtonClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
-    onBase64Ready?: (base64: string) => void; // Callback for base64 string
 }
 
 export const ComponentRenderer = (props: IDatasetToExcelProps) => {
-    const { makerStyleProps, buttonProps, dataSet, selectedColumns, fileName, itemsLoading, isLoading, onBase64Ready } = props;
+    const { makerStyleProps, buttonProps, dataSet, selectedColumns, fileName, itemsLoading, isLoading } = props;
     const buttonIcon: IIconProps = { iconName: buttonProps.iconName };
 
     const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-      props.onButtonClick(event);
-      console.log("Total Records: ", dataSet.paging.totalResultCount);
-      // Temporarily commented out const dataToExport = prepareData(dataSet, selectedColumns);
-      const dataToExport = [{ Name: "John Doe", Email: "john.doe@example.com" }, { Name: "Jane Doe", Email: "jane.doe@example.com" }];
-      console.log("Data to export:", dataToExport);
-      // If dataToExport is empty, then there is no data to export
-      if (dataToExport.length === 0) {
-          console.log("No data to export");
-          return;
+        props.onButtonClick(event);
+        console.log("Total Records: ", dataSet.paging.totalResultCount);
+        const dataToExport = prepareData(dataSet, selectedColumns);
+        // If dataToExport is empty, then there is no data to export
+        if (dataToExport.length === 0) {
+            console.log("No data to export");
+            return;
         }
         const worksheet: XLSX.WorkSheet = XLSX.utils.json_to_sheet(dataToExport);
         const workbook: XLSX.WorkBook = { Sheets: { 'data': worksheet }, SheetNames: ['data'] };
-
-        //Use XLSX.write() to get the workbook as a base64 string
-        const base64string = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
-        console.log("Base64 String:", base64string);
-        if (props.onBase64Ready) {
-            props.onBase64Ready(base64string);
-        }
-    };
+        XLSX.writeFile(workbook, `${fileName}.xlsx`);
+    }
 
     const isLoadingState = itemsLoading || isLoading;
 
     return (
         <DefaultButton
             styles={getStyle(makerStyleProps)}
-            title="Send Attachment"
-            ariaLabel="Send Attachment"
-            disabled={false}
+            title={isLoadingState ? "Loading data" : "Export To Excel"}
+            ariaLabel={isLoadingState ? "Loading data" : "Export To Excel"}
+            disabled={isLoadingState}
+            checked={false}
             onClick={handleClick}
-            iconProps={{ iconName: "Mail" }}
+            iconProps={isLoadingState ? undefined : buttonIcon}
+            onRenderIcon={isLoadingState ? () => <Spinner label="Loading data" /> : undefined}
         >
-           
+            {isLoadingState ? null : buttonProps.buttonText}
         </DefaultButton>
     );
 };
 
-interface TypedEntityRecord {
-  getValue(columnName: string): any;
+type DataSet = ComponentFramework.PropertyTypes.DataSet;
+
+const getColumnNames = (selectedColumns: DataSet): Array<{ key: string, value: string }> => {
+    // Check if both ColName and DisplayName columns exist
+    const hasColName = selectedColumns.columns.some(col => col.name === 'ColName');
+    const hasDisplayName = selectedColumns.columns.some(col => col.name === 'ColDisplayName');
+
+    if (hasColName && hasDisplayName) {
+        return selectedColumns.sortedRecordIds.map(colId => ({
+            key: selectedColumns.records[colId].getValue('ColName') as string,
+            value: selectedColumns.records[colId].getValue('ColDisplayName') as string
+        }));
+    } else {
+        console.log("Either ColName or ColDisplayName column is missing. Please update the dataset to include both columns and set the properties to the correct column names.");
+    }
+
+    // If the columns don't exist, return the original column names
+    return selectedColumns.columns.map(col => ({ key: col.name, value: col.name }));
 }
 
-// Define interfaces to describe the structure more clearly to TypeScript.
+const prepareData = (dataSet: DataSet, selectedColumns: DataSet | null = null): any[] => {
+    const data: any[] = [];
 
-interface IColumnValue {
-  displayName?: string;
-}
+    console.log("Selected Columns: ", selectedColumns?.sortedRecordIds.length);
 
-interface IRecord {
-  [key: string]: any; // This allows indexing with a string to return any type.
-}
-
-interface IColumns {
-  [columnName: string]: IColumnValue;
-}
-
-// Update the function to use these interfaces for better type checking.
-
-const getColumnNames = (dataSet: ComponentFramework.PropertyTypes.DataSet): Array<{ key: string, value: string }> => {
-    const columns: IColumns = dataSet.columns as unknown as IColumns; // Use 'as unknown as' for a two-step assertion if direct casting is problematic.
-    return Object.keys(columns).map(key => {
-        const column: IColumnValue = columns[key]; // Now TypeScript knows what to expect when accessing columns[key].
-        return { key, value: column.displayName || key };
-    });
-};
-
-const prepareData = (
-  dataSet: ComponentFramework.PropertyTypes.DataSet, 
-  selectedColumns: ComponentFramework.PropertyTypes.DataSet | null = null
-): any[] => {
-    const columnList = getColumnNames(selectedColumns || dataSet);
-    return dataSet.sortedRecordIds.map(recordId => {
-        const record: IRecord = dataSet.records[recordId] as unknown as IRecord; // Assuming records can be indexed with a string key.
-        let rowData: { [key: string]: any } = {};
-        columnList.forEach(({ key }) => {
-            rowData[key] = record[key]; // This access pattern should be clear to TypeScript now.
+    if (selectedColumns && selectedColumns.sortedRecordIds.length > 0) {
+        const columnList: Array<{ key: string, value: string }> = getColumnNames(selectedColumns);
+        dataSet.sortedRecordIds.forEach(recId => {
+            const record: any = {};
+            dataSet.columns.forEach(col => {
+                const matchingColumn = columnList.find(item => item.key === col.name);
+                if (matchingColumn) {
+                    record[matchingColumn.value] = dataSet.records[recId].getValue(matchingColumn.key);
+                }
+            });
+            data.push(record);
         });
-        return rowData;
-    });
-};
+    } else {
+        dataSet.sortedRecordIds.forEach(recId => {
+            const record: any = {};
+            dataSet.columns.forEach(col => {
+                const colName: string = col?.name;
+                record[colName] = dataSet.records[recId].getValue(colName);
+            });
+            data.push(record);
+        });
+    }
+    return data;
+}
 
+const getStyle = (styleProps: IMakerStyleProps) => {
+    const borderStyle = styleProps.borderWidth && styleProps.borderWidth > 0 ?
+        `solid ${styleProps.borderWidth}px ${styleProps.borderColor}` : "none"
 
-
-const getStyle = (styleProps: IMakerStyleProps): IButtonStyles => {
-    const borderStyle = styleProps.borderWidth && styleProps.borderWidth > 0 ? `solid ${styleProps.borderWidth}px ${styleProps.borderColor}` : "none";
-    return {
+    const styles: IButtonStyles = {
         root: {
             color: styleProps.textColor,
-            backgroundColor: styleProps.bgColor,
             border: borderStyle,
+            backgroundColor: styleProps.bgColor,
             borderRadius: `${styleProps.borderRadius}px`,
             width: `${styleProps.buttonWidth}px`,
-            height: `${styleProps.buttonHeight}px`,
+            height: `${styleProps.buttonHeight}px`
         },
         icon: {
-            color: styleProps.iconColor,
+            color: styleProps.iconColor
+
         },
         rootHovered: {
             color: styleProps.hoverTextColor,
             backgroundColor: styleProps.hoverBgColor,
-            border: `solid ${styleProps.borderWidth}px ${styleProps.borderHoverColor}`,
+            border: `solid ${styleProps.borderWidth}px ${styleProps.borderHoverColor}`
         },
-    };
-};
+        iconHovered: {
+            color: "inherit"
+        },
+        textContainer: {
+            flexGrow: 0
+        }
+    }
+
+    return styles;
+}

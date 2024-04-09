@@ -40,7 +40,8 @@ export const ComponentRenderer = (props: IDatasetToExcelProps) => {
     const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
       props.onButtonClick(event);
       console.log("Total Records: ", dataSet.paging.totalResultCount);
-      const dataToExport = prepareData(dataSet, selectedColumns);
+      // Temporarily commented out const dataToExport = prepareData(dataSet, selectedColumns);
+      const dataToExport = [{ Name: "John Doe", Email: "john.doe@example.com" }, { Name: "Jane Doe", Email: "jane.doe@example.com" }];
       console.log("Data to export:", dataToExport);
       // If dataToExport is empty, then there is no data to export
       if (dataToExport.length === 0) {

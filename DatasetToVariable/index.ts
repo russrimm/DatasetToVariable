@@ -1,5 +1,4 @@
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
-import { ButtonDefaultExample, IButtonExampleProps} from "./HelloWorld";
 import { ComponentRenderer, IDatasetToExcelProps, IMakerStyleProps, IMakerButtonProps } from "./ComponentRenderer";
 import * as React from "react";
 
@@ -9,6 +8,7 @@ export class DatasetToVariable implements ComponentFramework.ReactControl<IInput
     private theComponent: ComponentFramework.ReactControl<IInputs, IOutputs>;
     private notifyOutputChanged: () => void;
     private _excelBase64: string;
+    private readonly componentVersion: string = "1.0.0";
 
     /**
      * Empty constructor.
@@ -90,6 +90,8 @@ export class DatasetToVariable implements ComponentFramework.ReactControl<IInput
             },
         };
     
+
+        
        return React.createElement(ComponentRenderer, props);
 
     }
